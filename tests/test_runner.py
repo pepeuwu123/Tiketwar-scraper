@@ -64,3 +64,25 @@ def test_poll_exception_is_recorded_not_swallowed(r):
     assert out["ok"] is False and out["error"] == "RuntimeError"
     types = [json.loads(v["payload"])["type"] for _, v in r.xrange("tiketwar:test")]
     assert types == ["poll_error"]
+
+
+def test_heartbeat_is_written_even_when_the_poll_fails(r):
+    """The bug this test exists for.
+
+    The heartbeat used to be written only after a successful poll, so a rotted
+    selector stopped the heartbeat and the monitor reported the scraper as DEAD.
+    The loop was alive; only the site had changed. Liveness must not depend on
+    the site being healthy.
+    """
+    out = run_once(settings(), BoomAdapter(settings(), SiteState()), r)
+    assert out["ok"] is False
+    hb = json.loads(r.get("tiketwar:heartbeat"))
+    assert hb["ok"] is False, "a failed poll must still beat, with ok=False"
+    assert hb["state"] is None
+    assert 0 < r.ttl("tiketwar:heartbeat") <= 20
+
+def test_heartbeat_reports_ok_true_on_a_successful_poll(r):
+    a = FakeAdapter(settings(), SiteState(seats=2, available=True))
+    run_once(settings(), a, r)
+    hb = json.loads(r.get("tiketwar:heartbeat"))
+    assert hb["ok"] is True and hb["state"]["seats"] == 2

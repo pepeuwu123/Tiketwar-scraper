@@ -16,7 +16,22 @@ def publish(r, settings, event_type: str, **fields) -> str:
         approximate=True,
     )
 
-def heartbeat(r, settings, state) -> None:
-    """TTL'd key. If this expires, the scraper is dead even if the box is up."""
+def heartbeat(r, settings, state, ok: bool = True) -> None:
+    """TTL'd key. If this expires, the loop is not running at all.
+
+    Written on EVERY cycle, including failed ones, on purpose. If it were only
+    written after a successful poll, then a rotted selector would stop the
+    heartbeat and the monitor would report "scraper DEAD" - sending you to debug
+    the wrong thing. Liveness and site-health are two different questions, so
+    they get two different fields:
+
+      heartbeat present?  -> is the loop running?
+      last_ok             -> did the last poll succeed?
+    """
     ttl = max(10, int(settings.interval_seconds * 4))
-    r.set("tiketwar:heartbeat", json.dumps({"ts": time.time(), "state": state.to_dict()}), ex=ttl)
+    body = {
+        "ts": time.time(),
+        "ok": ok,
+        "state": state.to_dict() if state is not None else None,
+    }
+    r.set("tiketwar:heartbeat", json.dumps(body), ex=ttl)

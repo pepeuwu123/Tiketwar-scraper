@@ -15,10 +15,13 @@ def run_once(settings: Settings, adapter, r) -> dict:
     except Exception as exc:                      # noqa: BLE001 - we want every failure recorded
         log.warning("poll failed: %s", exc)
         events.publish(r, settings, "poll_error", error=type(exc).__name__, detail=str(exc)[:500])
+        # Still beat: the loop is alive, the SITE is what broke. Reporting this as
+        # a dead scraper would send you debugging the wrong component.
+        events.heartbeat(r, settings, None, ok=False)
         return {"ok": False, "error": type(exc).__name__}
 
     events.publish(r, settings, "check", state=state.to_dict())
-    events.heartbeat(r, settings, state)
+    events.heartbeat(r, settings, state, ok=True)
 
     if state.blocked:
         # Do NOT retry harder. A block means a human decides what happens next.
