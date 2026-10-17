@@ -9,6 +9,7 @@ class Settings:
     mode: str             # "mock" | "live"
     interval_seconds: float
     headless: bool
+    grab_once: bool
     redis_url: str
     stream_key: str
     user_agent: str
@@ -25,6 +26,9 @@ class Settings:
             mode=os.environ.get("SCRAPE_MODE", "mock"),
             interval_seconds=float(os.environ.get("INTERVAL_SECONDS", "5")),
             headless=os.environ.get("HEADLESS", "true").lower() == "true",
+            # You want ONE seat. Repeatedly calling add-to-cart is both pointless and
+            # the fastest way to get an account flagged, so this is on by default.
+            grab_once=os.environ.get("GRAB_ONCE", "true").lower() == "true",
             redis_url=os.environ.get("REDIS_URL", "redis://redis:6379/0"),
             stream_key=os.environ.get("STREAM_KEY", "tiketwar:events"),
             user_agent=os.environ.get("USER_AGENT", "Tiketwar-Monitor/0.1 (+personal use)"),

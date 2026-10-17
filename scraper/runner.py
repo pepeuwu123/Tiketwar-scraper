@@ -8,7 +8,10 @@ from .adapters import build_adapter
 
 log = logging.getLogger("tiketwar.scraper")
 
-def run_once(settings: Settings, adapter, r) -> dict:
+# survives restarts so a redeploy does not re-grab a second seat
+GRABBED_KEY = "tiketwar:grabbed"
+
+def run_once(settings: Settings, adapter, r, already_grabbed: bool = False) -> dict:
     """One cycle. Returns a summary dict so the daily report can count yields."""
     try:
         state = adapter.poll()
@@ -30,6 +33,12 @@ def run_once(settings: Settings, adapter, r) -> dict:
 
     grabbed = False
     if state.available:
+        if settings.grab_once and already_grabbed:
+            # Already have a seat in the cart. Keep watching (so the heartbeat and
+            # availability history stay accurate) but stop calling add-to-cart -
+            # that call is the one that looks abusive to a vendor.
+            return {"ok": True, "blocked": False, "seats": state.seats,
+                    "grabbed": False, "skipped": "already grabbed once"}
         ok, detail = adapter.add_to_cart()
         events.publish(r, settings, "add_to_cart", ok=ok, detail=detail, seats=state.seats)
         grabbed = ok
@@ -44,11 +53,17 @@ def main() -> None:
         log.warning("SCRAPE_MODE=%s - live mode: respect the site's terms and rate limits", settings.mode)
     adapter = build_adapter(settings)
     r = events.connect(settings)
-    log.info("scraper up: target=%s adapter=%s every %ss",
-             settings.target_url, settings.adapter, settings.interval_seconds)
+    # survive a restart without re-grabbing: the cart is still holding the seat
+    already_grabbed = r.get(GRABBED_KEY) == "1"
+    log.info("scraper up: target=%s adapter=%s every %ss grab_once=%s already_grabbed=%s",
+             settings.target_url, settings.adapter, settings.interval_seconds,
+             settings.grab_once, already_grabbed)
     while True:
         started = time.monotonic()
-        run_once(settings, adapter, r)
+        result = run_once(settings, adapter, r, already_grabbed=already_grabbed)
+        if result.get("grabbed"):
+            already_grabbed = True
+            r.set(GRABBED_KEY, "1", ex=86400)
         elapsed = time.monotonic() - started
         time.sleep(max(0.0, settings.interval_seconds - elapsed))
 

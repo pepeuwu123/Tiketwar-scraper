@@ -10,7 +10,7 @@ from scraper.site_state import SiteState
 def settings(**kw):
     base = dict(
         target_url="http://mock-vendor:8000", adapter="mock", mode="mock",
-        interval_seconds=1, headless=True, redis_url="redis://localhost:6379/0",
+        interval_seconds=1, headless=True, grab_once=True, redis_url="redis://localhost:6379/0",
         stream_key="tiketwar:test", user_agent="test",
     )
     base.update(kw)
@@ -86,3 +86,29 @@ def test_heartbeat_reports_ok_true_on_a_successful_poll(r):
     run_once(settings(), a, r)
     hb = json.loads(r.get("tiketwar:heartbeat"))
     assert hb["ok"] is True and hb["state"]["seats"] == 2
+
+
+def test_grab_once_stops_calling_add_to_cart(r):
+    """You need ONE seat. Re-calling add-to-cart every cycle is pointless and looks
+    abusive to a vendor - it is the behavior most likely to get an account flagged."""
+    a = FakeAdapter(settings(), SiteState(seats=5, available=True))
+    first = run_once(settings(), a, r, already_grabbed=False)
+    assert first["grabbed"] is True and a.cart_calls == 1
+
+    second = run_once(settings(), a, r, already_grabbed=True)
+    assert second["grabbed"] is False
+    assert second["skipped"] == "already grabbed once"
+    assert a.cart_calls == 1, "must not call add_to_cart again"
+
+
+def test_grab_once_off_keeps_trying(r):
+    """Escape hatch: some flows need a retry loop until the cart holds a seat."""
+    a = FakeAdapter(settings(grab_once=False), SiteState(seats=5, available=True))
+    run_once(settings(grab_once=False), a, r, already_grabbed=True)
+    assert a.cart_calls == 1
+
+
+def test_grab_state_survives_a_restart(r):
+    """The seat is still in the cart across a redeploy, so the flag is persisted."""
+    r.set("tiketwar:grabbed", "1", ex=86400)
+    assert r.get("tiketwar:grabbed") == "1"
