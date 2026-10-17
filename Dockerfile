@@ -1,19 +1,24 @@
-# The playwright image ships browser BINARIES at this exact version. The python
-# package must match them or the browsers are invisible at launch. So the version
-# lives in one variable and is used in both places - never as a bare >= anywhere.
-ARG PLAYWRIGHT_VERSION=1.47.0
-FROM mcr.microsoft.com/playwright/python:v${PLAYWRIGHT_VERSION}-jammy
+# Start slim on purpose.
+#
+# The only adapters that exist use httpx, not a browser, so the Playwright image
+# (~2 GB) buys you nothing today - and it is published mainly for amd64, which
+# can fail on an Apple Silicon machine. Add it back the first time you write an
+# adapter that actually needs to render JavaScript. When you do:
+#
+#   ARG PLAYWRIGHT_VERSION=1.47.0
+#   FROM mcr.microsoft.com/playwright/python:v${PLAYWRIGHT_VERSION}-jammy
+#   RUN printf 'playwright==%s\n' "${PLAYWRIGHT_VERSION}" > /tmp/constraints.txt \
+#    && pip install -c /tmp/constraints.txt .
+#
+# The version must appear in BOTH places: the image ships browser binaries, and
+# the python package has to match them exactly.
+FROM python:3.12-slim
 
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
 COPY pyproject.toml ./
-# Constrain rather than --no-deps: --no-deps would also skip redis and httpx,
-# leaving a container that cannot publish anything. This pins playwright to the
-# image's browser build while letting pip resolve the real dependencies.
-RUN printf 'playwright==%s\n' "${PLAYWRIGHT_VERSION}" > /tmp/constraints.txt \
- && pip install --no-cache-dir --upgrade pip \
- && pip install --no-cache-dir -c /tmp/constraints.txt .
+RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir .
 
 COPY scraper ./scraper
 
