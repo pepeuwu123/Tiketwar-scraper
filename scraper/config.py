@@ -13,6 +13,8 @@ class Settings:
     redis_url: str
     stream_key: str
     user_agent: str
+    dead_after_seconds: int = 120
+    max_backoff_seconds: float = 600
 
     @property
     def is_mock(self) -> bool:
@@ -32,4 +34,9 @@ class Settings:
             redis_url=os.environ.get("REDIS_URL", "redis://redis:6379/0"),
             stream_key=os.environ.get("STREAM_KEY", "tiketwar:events"),
             user_agent=os.environ.get("USER_AGENT", "Tiketwar-Monitor/0.1 (+personal use)"),
+            # Same variable the service reads, so "heartbeat expired" and "service
+            # says DEAD" happen at the same moment instead of 20s vs 120s.
+            dead_after_seconds=int(os.environ.get("DEAD_AFTER_SECONDS", "120")),
+            # Ceiling for slowing down after a block or a 429. Retry-After is honoured up to this.
+            max_backoff_seconds=float(os.environ.get("MAX_BACKOFF_SECONDS", "600")),
         )

@@ -3,12 +3,14 @@ name = "tiketwar-scraper"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
-  "playwright>=1.47",
   "redis>=5.0",
   "httpx>=0.27",
 ]
 
 [project.optional-dependencies]
+# No adapter imports playwright yet. It was a hard dependency anyway, so every
+# image build downloaded it for nothing. `pip install .[browser]` when one does.
+browser = ["playwright>=1.47"]
 dev = [
   "pytest>=8.0",
   "fakeredis>=2.24",   # tests/test_runner.py needs a fake redis
