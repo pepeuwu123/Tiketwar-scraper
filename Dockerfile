@@ -8,7 +8,7 @@
 #   ARG PLAYWRIGHT_VERSION=1.47.0
 #   FROM mcr.microsoft.com/playwright/python:v${PLAYWRIGHT_VERSION}-jammy
 #   RUN printf 'playwright==%s\n' "${PLAYWRIGHT_VERSION}" > /tmp/constraints.txt \
-#    && pip install -c /tmp/constraints.txt .
+#    && pip install -c /tmp/constraints.txt '.[browser]'
 #
 # The version must appear in BOTH places: the image ships browser binaries, and
 # the python package has to match them exactly.
