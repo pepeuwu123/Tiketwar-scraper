@@ -14,7 +14,7 @@ def publish(r, settings, event_type: str, **fields) -> str:
     return r.xadd(
         settings.stream_key,
         {"payload": json.dumps(body)},
-        maxlen=10000,
+        maxlen=settings.stream_maxlen,
         approximate=True,
     )
 

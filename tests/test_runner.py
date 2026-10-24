@@ -112,9 +112,28 @@ def test_grab_once_off_keeps_trying(r):
 
 
 def test_grab_state_survives_a_restart(r):
-    """The seat is still in the cart across a redeploy, so the flag is persisted."""
-    r.set("tiketwar:grabbed", "1", ex=86400)
-    assert r.get("tiketwar:grabbed") == "1"
+    """The seat is still in the cart across a redeploy, so the flag is persisted.
+
+    This test used to set a redis key and read it back, which tested redis, not
+    the scraper. It now goes through the functions main() uses on both sides.
+    """
+    from scraper.runner import load_grabbed, mark_grabbed
+    assert load_grabbed(r) is False
+    mark_grabbed(r, settings())
+    assert load_grabbed(r) is True, "a restarted scraper must see the earlier grab"
+
+def test_grab_flag_lasts_as_long_as_the_cart_holds_the_seat(r):
+    """A 24h flag with a 15-minute cart meant: seat lost, and no re-grab for a day."""
+    from scraper.runner import load_grabbed, mark_grabbed
+    mark_grabbed(r, settings(grab_hold_seconds=900))
+    assert 0 < r.ttl("tiketwar:grabbed") <= 900
+
+def test_stream_is_trimmed_at_the_configured_length(r):
+    s = settings(stream_maxlen=50)
+    for _ in range(300):
+        from scraper import events
+        events.publish(r, s, "check")
+    assert 50 <= r.xlen("tiketwar:test") < 300, "trimmed, approximately, near the limit"
 
 
 class CartBoomAdapter(FakeAdapter):

@@ -107,6 +107,13 @@ def sleep_alive(r, settings: Settings, seconds: float) -> None:
         if end - time.monotonic() > 0:
             events.touch_heartbeat(r, settings)
 
+def load_grabbed(r) -> bool:
+    return r.get(GRABBED_KEY) == "1"
+
+def mark_grabbed(r, settings: Settings) -> None:
+    # survive a restart without re-grabbing, for as long as the cart holds the seat
+    r.set(GRABBED_KEY, "1", ex=settings.grab_hold_seconds)
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     settings = Settings.from_env()
@@ -114,8 +121,7 @@ def main() -> None:
         log.warning("SCRAPE_MODE=%s - live mode: respect the site's terms and rate limits", settings.mode)
     adapter = build_adapter(settings)
     r = events.connect(settings)
-    # survive a restart without re-grabbing: the cart is still holding the seat
-    already_grabbed = r.get(GRABBED_KEY) == "1"
+    already_grabbed = load_grabbed(r)
     log.info("scraper up: target=%s adapter=%s every %ss grab_once=%s already_grabbed=%s",
              settings.target_url, settings.adapter, settings.interval_seconds,
              settings.grab_once, already_grabbed)
@@ -125,7 +131,7 @@ def main() -> None:
         result = run_once(settings, adapter, r, already_grabbed=already_grabbed)
         if result.get("grabbed"):
             already_grabbed = True
-            r.set(GRABBED_KEY, "1", ex=86400)
+            mark_grabbed(r, settings)
         streak = streak + 1 if is_bad(result) else 0
         delay = next_delay(settings, result, streak)
         if delay > settings.interval_seconds:
